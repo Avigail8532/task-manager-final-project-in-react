@@ -18,7 +18,8 @@ import {
   Typography,
 } from '@mui/material'
 import { AxiosError } from 'axios'
-import { createTask, deleteTask, getTasks, updateTask } from '../services/taskService'
+import { Link } from 'react-router-dom'
+import { deleteTask, getTasks, updateTask } from '../services/taskService'
 import type { CreateTaskPayload, Task, TaskPriority, TaskStatus } from '../types/task'
 import { TASK_PRIORITIES, TASK_STATUSES } from '../types/task'
 
@@ -44,10 +45,10 @@ function Tasks() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [formValues, setFormValues] = useState<CreateTaskPayload>(initialFormValues)
   const [formErrors, setFormErrors] = useState<FormErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [deleteTargetTask, setDeleteTargetTask] = useState<Task | null>(null)
   const [isDeletingTaskId, setIsDeletingTaskId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -113,6 +114,10 @@ function Tasks() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
+    if (!editingTaskId) {
+      return
+    }
+
     const validationErrors = validateForm(formValues)
     setFormErrors(validationErrors)
 
@@ -134,28 +139,17 @@ function Tasks() {
         dueDate: formValues.dueDate,
       }
 
-      if (editingTaskId) {
-        const updatedTask = await updateTask(editingTaskId, payload)
-        setTasks((prev) => prev.map((task) => (task.id === updatedTask.id ? updatedTask : task)))
-        setSubmitSuccess('Task updated successfully.')
-        setEditingTaskId(null)
-      } else {
-        const createdTask = await createTask(payload)
-        setTasks((prev) => [createdTask, ...prev])
-        setSubmitSuccess('Task created successfully.')
-      }
+      const updatedTask = await updateTask(editingTaskId, payload)
+      setTasks((prev) => prev.map((task) => (task.id === updatedTask.id ? updatedTask : task)))
+      setSubmitSuccess('Task updated successfully.')
+      setEditingTaskId(null)
 
       setFormValues(initialFormValues)
       setFormErrors({})
     } catch (err) {
       const axiosError = err as AxiosError<{ message?: string }>
       const backendMessage = axiosError.response?.data?.message
-      setSubmitError(
-        backendMessage ??
-          (editingTaskId
-            ? 'Failed to update task. Please try again.'
-            : 'Failed to create task. Please try again.'),
-      )
+      setSubmitError(backendMessage ?? 'Failed to update task. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -212,112 +206,122 @@ function Tasks() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ mb: 2 }}>
-        Tasks
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        {editingTaskId ? 'Edit mode' : 'Create mode'}
-      </Typography>
-      <Box
-        component="form"
-        onSubmit={handleSubmit}
-        sx={{ mb: 4, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={2}
+        sx={{ mb: 2, justifyContent: 'space-between', alignItems: { sm: 'center' } }}
       >
-        <Stack spacing={2}>
-          <TextField
-            label="Title"
-            required
-            value={formValues.title}
-            onChange={handleChange('title')}
-            error={Boolean(formErrors.title)}
-            helperText={formErrors.title}
-          />
-          <TextField
-            label="Description"
-            required
-            multiline
-            minRows={3}
-            value={formValues.description}
-            onChange={handleChange('description')}
-            error={Boolean(formErrors.description)}
-            helperText={formErrors.description}
-          />
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <Typography variant="h4">
+          Tasks
+        </Typography>
+        <Button component={Link} to="/tasks/new" variant="contained">
+          Create Task
+        </Button>
+      </Stack>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        View tasks, edit tasks, and delete tasks.
+      </Typography>
+
+      {editingTaskId && (
+        <Box
+          component="form"
+          onSubmit={handleSubmit}
+          sx={{ mb: 4, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}
+        >
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Edit Task
+          </Typography>
+          <Stack spacing={2}>
             <TextField
-              select
-              label="Status"
+              label="Title"
               required
-              value={formValues.status}
-              onChange={handleChange('status')}
-              error={Boolean(formErrors.status)}
-              helperText={formErrors.status}
-              fullWidth
-            >
-              {TASK_STATUSES.map((status) => (
-                <MenuItem key={status} value={status}>
-                  {status}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              label="Priority"
-              required
-              value={formValues.priority}
-              onChange={handleChange('priority')}
-              error={Boolean(formErrors.priority)}
-              helperText={formErrors.priority}
-              fullWidth
-            >
-              {TASK_PRIORITIES.map((priority) => (
-                <MenuItem key={priority} value={priority}>
-                  {priority}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Stack>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField
-              label="Category"
-              required
-              value={formValues.category}
-              onChange={handleChange('category')}
-              error={Boolean(formErrors.category)}
-              helperText={formErrors.category}
-              fullWidth
+              value={formValues.title}
+              onChange={handleChange('title')}
+              error={Boolean(formErrors.title)}
+              helperText={formErrors.title}
             />
             <TextField
-              label="Due Date"
-              type="date"
+              label="Description"
               required
-              value={formValues.dueDate}
-              onChange={handleChange('dueDate')}
-              error={Boolean(formErrors.dueDate)}
-              helperText={formErrors.dueDate}
-              slotProps={{ inputLabel: { shrink: true } }}
-              fullWidth
+              multiline
+              minRows={3}
+              value={formValues.description}
+              onChange={handleChange('description')}
+              error={Boolean(formErrors.description)}
+              helperText={formErrors.description}
             />
-          </Stack>
-          {submitError && <Alert severity="error">{submitError}</Alert>}
-          {submitSuccess && <Alert severity="success">{submitSuccess}</Alert>}
-          <Stack direction="row" spacing={1}>
-            <Button type="submit" variant="contained" disabled={isSubmitting}>
-              {isSubmitting
-                ? editingTaskId
-                  ? 'Saving changes...'
-                  : 'Creating task...'
-                : editingTaskId
-                  ? 'Save Changes'
-                  : 'Create Task'}
-            </Button>
-            {editingTaskId && (
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                select
+                label="Status"
+                required
+                value={formValues.status}
+                onChange={handleChange('status')}
+                error={Boolean(formErrors.status)}
+                helperText={formErrors.status}
+                fullWidth
+              >
+                {TASK_STATUSES.map((status) => (
+                  <MenuItem key={status} value={status}>
+                    {status}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                label="Priority"
+                required
+                value={formValues.priority}
+                onChange={handleChange('priority')}
+                error={Boolean(formErrors.priority)}
+                helperText={formErrors.priority}
+                fullWidth
+              >
+                {TASK_PRIORITIES.map((priority) => (
+                  <MenuItem key={priority} value={priority}>
+                    {priority}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Stack>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="Category"
+                required
+                value={formValues.category}
+                onChange={handleChange('category')}
+                error={Boolean(formErrors.category)}
+                helperText={formErrors.category}
+                fullWidth
+              />
+              <TextField
+                label="Due Date"
+                type="date"
+                required
+                value={formValues.dueDate}
+                onChange={handleChange('dueDate')}
+                error={Boolean(formErrors.dueDate)}
+                helperText={formErrors.dueDate}
+                slotProps={{ inputLabel: { shrink: true } }}
+                fullWidth
+              />
+            </Stack>
+            {submitError && <Alert severity="error">{submitError}</Alert>}
+            {submitSuccess && <Alert severity="success">{submitSuccess}</Alert>}
+            <Stack direction="row" spacing={1}>
+              <Button type="submit" variant="contained" disabled={isSubmitting}>
+                {isSubmitting ? 'Saving changes...' : 'Save Changes'}
+              </Button>
               <Button type="button" variant="outlined" onClick={handleCancelEdit} disabled={isSubmitting}>
                 Cancel Edit
               </Button>
-            )}
+            </Stack>
           </Stack>
-        </Stack>
-      </Box>
+        </Box>
+      )}
+
+      {!editingTaskId && submitError && <Alert severity="error" sx={{ mb: 2 }}>{submitError}</Alert>}
+      {!editingTaskId && submitSuccess && <Alert severity="success" sx={{ mb: 2 }}>{submitSuccess}</Alert>}
 
       {loading && (
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 2 }}>
@@ -351,6 +355,14 @@ function Tasks() {
                 Due Date: {new Date(task.dueDate).toLocaleDateString()}
               </Typography>
               <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                <Button
+                  size="small"
+                  component={Link}
+                  to={`/tasks/${task.id}`}
+                  disabled={isSubmitting || isDeletingTaskId === task.id}
+                >
+                  View Details
+                </Button>
                 <Button
                   size="small"
                   variant="outlined"
