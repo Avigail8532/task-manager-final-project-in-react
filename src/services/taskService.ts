@@ -15,3 +15,15 @@ export const createTask = async (payload: CreateTaskPayload): Promise<Task> => {
   const response = await api.post<ApiResponse<Task>>('/api/tasks', payload)
   return response.data.data
 }
+
+export const updateTask = async (
+  id: string,
+  payload: CreateTaskPayload,
+): Promise<Task> => {
+  const response = await api.put<ApiResponse<Task>>(`/api/tasks/${id}`, payload)
+  return response.data.data
+}
+
+export const deleteTask = async (id: string): Promise<void> => {
+  await api.delete(`/api/tasks/${id}`)
+}

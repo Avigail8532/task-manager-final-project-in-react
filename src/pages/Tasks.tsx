@@ -8,13 +8,17 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   MenuItem,
   Stack,
   TextField,
   Typography,
 } from '@mui/material'
 import { AxiosError } from 'axios'
-import { createTask, getTasks } from '../services/taskService'
+import { createTask, deleteTask, getTasks, updateTask } from '../services/taskService'
 import type { CreateTaskPayload, Task, TaskPriority, TaskStatus } from '../types/task'
 import { TASK_PRIORITIES, TASK_STATUSES } from '../types/task'
 
@@ -43,6 +47,9 @@ function Tasks() {
   const [formValues, setFormValues] = useState<CreateTaskPayload>(initialFormValues)
   const [formErrors, setFormErrors] = useState<FormErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [deleteTargetTask, setDeleteTargetTask] = useState<Task | null>(null)
+  const [isDeletingTaskId, setIsDeletingTaskId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null)
 
@@ -127,17 +134,79 @@ function Tasks() {
         dueDate: formValues.dueDate,
       }
 
-      const createdTask = await createTask(payload)
-      setTasks((prev) => [createdTask, ...prev])
+      if (editingTaskId) {
+        const updatedTask = await updateTask(editingTaskId, payload)
+        setTasks((prev) => prev.map((task) => (task.id === updatedTask.id ? updatedTask : task)))
+        setSubmitSuccess('Task updated successfully.')
+        setEditingTaskId(null)
+      } else {
+        const createdTask = await createTask(payload)
+        setTasks((prev) => [createdTask, ...prev])
+        setSubmitSuccess('Task created successfully.')
+      }
+
       setFormValues(initialFormValues)
       setFormErrors({})
-      setSubmitSuccess('Task created successfully.')
     } catch (err) {
       const axiosError = err as AxiosError<{ message?: string }>
       const backendMessage = axiosError.response?.data?.message
-      setSubmitError(backendMessage ?? 'Failed to create task. Please try again.')
+      setSubmitError(
+        backendMessage ??
+          (editingTaskId
+            ? 'Failed to update task. Please try again.'
+            : 'Failed to create task. Please try again.'),
+      )
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleEditTask = (task: Task) => {
+    setEditingTaskId(task.id)
+    setFormValues({
+      title: task.title,
+      description: task.description,
+      status: task.status,
+      priority: task.priority,
+      category: task.category,
+      dueDate: new Date(task.dueDate).toISOString().slice(0, 10),
+    })
+    setFormErrors({})
+    setSubmitError(null)
+    setSubmitSuccess(null)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingTaskId(null)
+    setFormValues(initialFormValues)
+    setFormErrors({})
+    setSubmitError(null)
+    setSubmitSuccess(null)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTargetTask) {
+      return
+    }
+
+    setIsDeletingTaskId(deleteTargetTask.id)
+    setSubmitError(null)
+    setSubmitSuccess(null)
+
+    try {
+      await deleteTask(deleteTargetTask.id)
+      setTasks((prev) => prev.filter((task) => task.id !== deleteTargetTask.id))
+      if (editingTaskId === deleteTargetTask.id) {
+        handleCancelEdit()
+      }
+      setDeleteTargetTask(null)
+      setSubmitSuccess('Task deleted successfully.')
+    } catch (err) {
+      const axiosError = err as AxiosError<{ message?: string }>
+      const backendMessage = axiosError.response?.data?.message
+      setSubmitError(backendMessage ?? 'Failed to delete task. Please try again.')
+    } finally {
+      setIsDeletingTaskId(null)
     }
   }
 
@@ -145,6 +214,9 @@ function Tasks() {
     <Box>
       <Typography variant="h4" sx={{ mb: 2 }}>
         Tasks
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        {editingTaskId ? 'Edit mode' : 'Create mode'}
       </Typography>
       <Box
         component="form"
@@ -228,9 +300,22 @@ function Tasks() {
           </Stack>
           {submitError && <Alert severity="error">{submitError}</Alert>}
           {submitSuccess && <Alert severity="success">{submitSuccess}</Alert>}
-          <Button type="submit" variant="contained" disabled={isSubmitting}>
-            {isSubmitting ? 'Creating task...' : 'Create Task'}
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button type="submit" variant="contained" disabled={isSubmitting}>
+              {isSubmitting
+                ? editingTaskId
+                  ? 'Saving changes...'
+                  : 'Creating task...'
+                : editingTaskId
+                  ? 'Save Changes'
+                  : 'Create Task'}
+            </Button>
+            {editingTaskId && (
+              <Button type="button" variant="outlined" onClick={handleCancelEdit} disabled={isSubmitting}>
+                Cancel Edit
+              </Button>
+            )}
+          </Stack>
         </Stack>
       </Box>
 
@@ -265,10 +350,50 @@ function Tasks() {
               <Typography variant="body2">
                 Due Date: {new Date(task.dueDate).toLocaleDateString()}
               </Typography>
+              <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => handleEditTask(task)}
+                  disabled={isSubmitting || isDeletingTaskId === task.id}
+                >
+                  Edit
+                </Button>
+                <Button
+                  size="small"
+                  color="error"
+                  variant="outlined"
+                  onClick={() => setDeleteTargetTask(task)}
+                  disabled={isDeletingTaskId === task.id || isSubmitting}
+                >
+                  {isDeletingTaskId === task.id ? 'Deleting...' : 'Delete'}
+                </Button>
+              </Stack>
             </CardContent>
           </Card>
         ))}
       </Stack>
+
+      <Dialog open={Boolean(deleteTargetTask)} onClose={() => setDeleteTargetTask(null)}>
+        <DialogTitle>Delete Task</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this task?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTargetTask(null)} disabled={Boolean(isDeletingTaskId)}>
+            Cancel
+          </Button>
+          <Button
+            color="error"
+            onClick={() => void handleConfirmDelete()}
+            disabled={Boolean(isDeletingTaskId)}
+          >
+            Confirm Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }
