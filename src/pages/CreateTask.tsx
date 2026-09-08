@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { Alert, Box, Button, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { AxiosError } from 'axios'
 import { useNavigate } from 'react-router-dom'
+import { useTasks } from '../hooks/useTasks'
 import { createTask } from '../services/taskService'
 import { TASK_PRIORITIES, TASK_STATUSES } from '../types/task'
 import type { CreateTaskPayload, TaskPriority, TaskStatus } from '../types/task'
@@ -27,6 +28,7 @@ const initialFormValues: CreateTaskPayload = {
 
 function CreateTask() {
   const navigate = useNavigate()
+  const { addTask } = useTasks()
   const [formValues, setFormValues] = useState<CreateTaskPayload>(initialFormValues)
   const [formErrors, setFormErrors] = useState<FormErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -99,7 +101,8 @@ function CreateTask() {
         dueDate: formValues.dueDate,
       }
 
-      await createTask(payload)
+      const createdTask = await createTask(payload)
+      addTask(createdTask)
       setSubmitSuccess('Task created successfully!')
       setFormValues(initialFormValues)
       setFormErrors({})

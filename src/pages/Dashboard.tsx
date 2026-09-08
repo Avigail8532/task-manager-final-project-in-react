@@ -1,27 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Alert, Card, CardContent, CircularProgress, Grid, Stack, Typography } from '@mui/material'
-import { getTasks } from '../services/taskService'
-import type { Task } from '../types/task'
+import { useTasks } from '../hooks/useTasks'
 
 function Dashboard() {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const fetchTasks = async () => {
-      try {
-        const data = await getTasks()
-        setTasks(data)
-      } catch (_err) {
-        setError('Failed to load dashboard summary.')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void fetchTasks()
-  }, [])
+  const { tasks, loading, error } = useTasks()
 
   const stats = useMemo(() => {
     const completed = tasks.filter((task) => task.status === 'completed').length
@@ -48,7 +30,7 @@ function Dashboard() {
   }
 
   if (error) {
-    return <Alert severity="error">{error}</Alert>
+    return <Alert severity="error">Failed to load dashboard summary.</Alert>
   }
 
   return (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import {
   Alert,
@@ -19,7 +19,8 @@ import {
 } from '@mui/material'
 import { AxiosError } from 'axios'
 import { Link } from 'react-router-dom'
-import { deleteTask, getTasks, updateTask } from '../services/taskService'
+import { useTasks } from '../hooks/useTasks'
+import { deleteTask, updateTask } from '../services/taskService'
 import type { CreateTaskPayload, Task, TaskPriority, TaskStatus } from '../types/task'
 import { TASK_PRIORITIES, TASK_STATUSES } from '../types/task'
 
@@ -42,9 +43,7 @@ const initialFormValues: CreateTaskPayload = {
 }
 
 function Tasks() {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { tasks, loading, error, updateTaskInState, removeTaskFromState } = useTasks()
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [formValues, setFormValues] = useState<CreateTaskPayload>(initialFormValues)
   const [formErrors, setFormErrors] = useState<FormErrors>({})
@@ -53,21 +52,6 @@ function Tasks() {
   const [isDeletingTaskId, setIsDeletingTaskId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null)
-
-  useEffect(() => {
-    const fetchTasks = async () => {
-      try {
-        const data = await getTasks()
-        setTasks(data)
-      } catch (_err) {
-        setError('Failed to load tasks. Please try again.')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void fetchTasks()
-  }, [])
 
   const validateForm = (values: CreateTaskPayload): FormErrors => {
     const errors: FormErrors = {}
@@ -140,7 +124,7 @@ function Tasks() {
       }
 
       const updatedTask = await updateTask(editingTaskId, payload)
-      setTasks((prev) => prev.map((task) => (task.id === updatedTask.id ? updatedTask : task)))
+      updateTaskInState(updatedTask)
       setSubmitSuccess('Task updated successfully.')
       setEditingTaskId(null)
 
@@ -189,7 +173,7 @@ function Tasks() {
 
     try {
       await deleteTask(deleteTargetTask.id)
-      setTasks((prev) => prev.filter((task) => task.id !== deleteTargetTask.id))
+      removeTaskFromState(deleteTargetTask.id)
       if (editingTaskId === deleteTargetTask.id) {
         handleCancelEdit()
       }

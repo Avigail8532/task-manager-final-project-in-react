@@ -4,6 +4,7 @@ import { CssBaseline, ThemeProvider } from '@mui/material'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
+import { TasksProvider } from './context/TasksContext'
 import theme from './theme/theme'
 
 createRoot(document.getElementById('root')!).render(
@@ -11,7 +12,9 @@ createRoot(document.getElementById('root')!).render(
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <BrowserRouter>
-        <App />
+        <TasksProvider>
+          <App />
+        </TasksProvider>
       </BrowserRouter>
     </ThemeProvider>
   </StrictMode>,
