@@ -18,7 +18,7 @@ import {
   Typography,
 } from '@mui/material'
 import { AxiosError } from 'axios'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useTasks } from '../hooks/useTasks'
 import { deleteTask, updateTask } from '../services/taskService'
 import type { CreateTaskPayload, Task, TaskPriority, TaskStatus } from '../types/task'
@@ -42,8 +42,12 @@ const initialFormValues: CreateTaskPayload = {
   dueDate: '',
 }
 
+const SORT_OPTIONS = ['newest', 'oldest', 'dueDate'] as const
+type TaskSort = (typeof SORT_OPTIONS)[number]
+
 function Tasks() {
   const { tasks, loading, error, updateTaskInState, removeTaskFromState } = useTasks()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [formValues, setFormValues] = useState<CreateTaskPayload>(initialFormValues)
   const [formErrors, setFormErrors] = useState<FormErrors>({})
@@ -52,6 +56,73 @@ function Tasks() {
   const [isDeletingTaskId, setIsDeletingTaskId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null)
+
+  const query = searchParams.get('q') ?? ''
+  const rawStatus = searchParams.get('status') ?? ''
+  const rawPriority = searchParams.get('priority') ?? ''
+  const rawSort = searchParams.get('sort') ?? ''
+
+  const statusFilter: TaskStatus | '' = TASK_STATUSES.includes(rawStatus as TaskStatus)
+    ? (rawStatus as TaskStatus)
+    : ''
+  const priorityFilter: TaskPriority | '' = TASK_PRIORITIES.includes(rawPriority as TaskPriority)
+    ? (rawPriority as TaskPriority)
+    : ''
+  const sortFilter: TaskSort | '' = SORT_OPTIONS.includes(rawSort as TaskSort)
+    ? (rawSort as TaskSort)
+    : ''
+
+  const updateSearchParam = (key: 'q' | 'status' | 'priority' | 'sort', value: string) => {
+    const nextParams = new URLSearchParams(searchParams)
+    const nextValue = value.trim()
+
+    if (!nextValue) {
+      nextParams.delete(key)
+    } else {
+      nextParams.set(key, nextValue)
+    }
+
+    setSearchParams(nextParams, { replace: true })
+  }
+
+  const clearFilters = () => {
+    setSearchParams({}, { replace: true })
+  }
+
+  const displayedTasks = [...tasks]
+    .filter((task) => {
+      if (!query.trim()) {
+        return true
+      }
+      return task.title.toLowerCase().includes(query.trim().toLowerCase())
+    })
+    .filter((task) => {
+      if (!statusFilter) {
+        return true
+      }
+      return task.status === statusFilter
+    })
+    .filter((task) => {
+      if (!priorityFilter) {
+        return true
+      }
+      return task.priority === priorityFilter
+    })
+    .sort((a, b) => {
+      if (sortFilter === 'oldest') {
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      }
+
+      if (sortFilter === 'dueDate') {
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+      }
+
+      if (sortFilter === 'newest') {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      }
+
+      return 0
+    })
 
   const validateForm = (values: CreateTaskPayload): FormErrors => {
     const errors: FormErrors = {}
@@ -206,6 +277,62 @@ function Tasks() {
         View tasks, edit tasks, and delete tasks.
       </Typography>
 
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
+        <TextField
+          label="Search by title"
+          value={query}
+          onChange={(event) => updateSearchParam('q', event.target.value)}
+          fullWidth
+        />
+        <TextField
+          select
+          label="Status"
+          value={statusFilter}
+          onChange={(event) => updateSearchParam('status', event.target.value)}
+          sx={{ minWidth: { md: 180 } }}
+        >
+          <MenuItem value="">All statuses</MenuItem>
+          {TASK_STATUSES.map((status) => (
+            <MenuItem key={status} value={status}>
+              {status}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          label="Priority"
+          value={priorityFilter}
+          onChange={(event) => updateSearchParam('priority', event.target.value)}
+          sx={{ minWidth: { md: 180 } }}
+        >
+          <MenuItem value="">All priorities</MenuItem>
+          {TASK_PRIORITIES.map((priority) => (
+            <MenuItem key={priority} value={priority}>
+              {priority}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          label="Sort"
+          value={sortFilter}
+          onChange={(event) => updateSearchParam('sort', event.target.value)}
+          sx={{ minWidth: { md: 180 } }}
+        >
+          <MenuItem value="">Default</MenuItem>
+          <MenuItem value="newest">Newest</MenuItem>
+          <MenuItem value="oldest">Oldest</MenuItem>
+          <MenuItem value="dueDate">Due Date</MenuItem>
+        </TextField>
+        <Button
+          variant="outlined"
+          onClick={clearFilters}
+          disabled={!query && !statusFilter && !priorityFilter && !sortFilter}
+        >
+          Clear Filters
+        </Button>
+      </Stack>
+
       {editingTaskId && (
         <Box
           component="form"
@@ -321,9 +448,12 @@ function Tasks() {
       )}
 
       {!loading && !error && tasks.length === 0 && <Typography>No tasks yet.</Typography>}
+      {!loading && !error && tasks.length > 0 && displayedTasks.length === 0 && (
+        <Typography>No tasks match the current filters.</Typography>
+      )}
 
       <Stack spacing={2}>
-        {tasks.map((task) => (
+        {displayedTasks.map((task) => (
           <Card key={task.id} variant="outlined">
             <CardContent>
               <Typography variant="h6">{task.title}</Typography>
